@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package net;
+
+message listen_request{
+  uint32 port = 1;
+}
+
+message listen_response{
+  uint32 port = 1;
+  enum Status {
+    success = 0;
+    listen_fail = 1;
+    other_host_listening = 3;
+  }
+  Status status = 2;
+}
+
+
+message pack {
+  uint64 id = 1;
+  uint32 port = 2;
+  enum Type {
+    translate = 0;
+    connect = 1;
+    disconnect = 2;
+  }
+  Type type = 3;
+  bytes data = 4;
+}
+
+message data {
+  optional listen_request listen_request = 1;
+  optional listen_response listen_response = 2;
+  optional pack pack = 3;
+}
+

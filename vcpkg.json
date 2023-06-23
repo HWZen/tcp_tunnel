@@ -1,0 +1,12 @@
+{
+  "name" : "tcp-tunnel",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "57d3194e702a2959e86a6748999ad71fc24f7922",
+  "dependencies" : [ {
+    "name" : "asio",
+    "version>=" : "1.28.0#1"
+  }, {
+    "name" : "protobuf",
+    "version>=" : "3.21.12"
+  } ]
+}
