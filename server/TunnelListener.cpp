@@ -5,6 +5,7 @@
 // 
 
 #include "TunnelListener.h"
+#include "Pool.h"
 #include <chrono>
 using namespace std::chrono_literals;
 
@@ -15,9 +16,11 @@ awaitable<void> TunnelListener::ClientCallback(const net::pack& pack)
     case net::pack_Type_connect:
         // client's ark
         break;
-    case net::pack_Type_disconnect:
+    case net::pack_Type_disconnect:{
+        std::lock_guard ul{connectionMutex};
         connection.erase(pack.id());
         break;
+    }
     case net::pack_Type_translate:
         SendToConnection(pack);
         break;
@@ -30,8 +33,10 @@ awaitable<void> TunnelListener::ClientCallback(const net::pack& pack)
 awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
 {
     // check id exist
+    std::unique_lock ul{connectionMutex};
     auto it = connection.find(pack.id());
     if (it == connection.end()) {
+        ul.unlock();
         // log it
         // send client that this connection was disconnected
         net::pack response;
@@ -42,6 +47,7 @@ awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
 
         co_return;
     }
+    ul.unlock();
 
     // set buffers sequence
     std::vector<asio::const_buffer> buffers;
@@ -61,13 +67,15 @@ awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
         RequireSendToClient(response);
 
         // remove connection
+        ul.lock();
         connection.erase(it);
     }
 
 }
 
-TunnelListener::TunnelListener(asio::io_context& io_context, tcp::acceptor acceptor,
-        std::function<awaitable<void>(tcp::socket)> NewConnection,
+TunnelListener::TunnelListener(asio::io_context& io_context,
+        std::shared_ptr<tcp::acceptor>,
+        std::function<awaitable<void>(uint64_t)> NewConnection,
         std::function<awaitable<void>(const net::pack&)> SendToClient,
         std::function<void()> RequireDestroy
         ):
@@ -78,23 +86,30 @@ TunnelListener::TunnelListener(asio::io_context& io_context, tcp::acceptor accep
 {
     co_spawn(io_context, [this]() -> awaitable<void> {
         for(;;) {
-            auto [ec, socket] = co_await this->acceptor.async_accept(use_nothrow_awaitable);
+            auto [ec, socket] = co_await this->acceptor->async_accept(use_nothrow_awaitable);
             if (ec) {
                 // log it
                 this->RequireDestroy();
             }
             auto this_cnt = cnt++;
+            std::unique_lock ul{waitAckConnectionMutex};
             this->waitAckConnection.emplace(this_cnt, std::move(socket));
+            ul.unlock();
+            ul.release();
 
-            co_spawn(co_await this_coro::executor, this->RequireNewConnection(std::move(socket)), asio::detached);
+            co_spawn(co_await this_coro::executor, this->RequireNewConnection(this_cnt), asio::detached);
             co_spawn(co_await this_coro::executor, [this_cnt, this]() -> awaitable<void> {
                   co_await timeout(5s);
+                  std::lock_guard lg{this->waitAckConnectionMutex};
                   this->waitAckConnection.erase(this_cnt);
             }, asio::detached);
         }
     }, asio::detached);
 
+}
 
+TunnelListener::~TunnelListener() {
+    Pool<tcp::acceptor>::GetInstance().ReleaseAcceptor(acceptor->local_endpoint().port());
 }
 
 

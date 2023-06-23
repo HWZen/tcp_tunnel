@@ -21,13 +21,13 @@
 class TunnelListener {
 public:
     TunnelListener(asio::io_context& io_context,
-            tcp::acceptor acceptor,
-            std::function<awaitable<void>(tcp::socket)> NewConnection,
+            std::shared_ptr<tcp::acceptor> acceptor,
+            std::function<awaitable<void>(uint64_t)> NewConnection,
             std::function<awaitable<void>(const net::pack &)> SendToClient,
             std::function<void()> RequireDestroy
             );
 
-    tcp::acceptor acceptor;
+    std::shared_ptr<tcp::acceptor> acceptor;
     std::atomic_int64_t cnt{0};
 
     std::mutex connectionMutex;
@@ -35,7 +35,7 @@ public:
     std::mutex waitAckConnectionMutex;
     std::unordered_map<uint64_t, tcp::socket> waitAckConnection;
 
-    std::function<awaitable<void>(tcp::socket)> RequireNewConnection;
+    std::function<awaitable<void>(uint64_t)> RequireNewConnection;
 
     awaitable<void> ClientCallback(const net::pack& pack);
 
@@ -44,6 +44,8 @@ public:
     std::function<awaitable<void>(const net::pack &)> RequireSendToClient;
 
     std::function<void()> RequireDestroy;
+
+    ~TunnelListener();
 
 };
 

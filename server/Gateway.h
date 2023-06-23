@@ -8,16 +8,24 @@
 #define TCP_TUNNEL_GATEWAY_H
 #include "asio_pch.h"
 #include "TunnelListener.h"
-#include <unordered_map>
+#include <unordered_set>
 #include <memory>
 
 class Gateway
 {
 public:
-    tcp::acceptor acceptor;
-    std::unordered_map<tcp::socket, std::unique_ptr<TunnelListener>> listeners;
+
+    explicit Gateway(
+            uint16_t port
+            );
+
+    asio::io_context ioContext;
+    std::shared_ptr<tcp::acceptor> listenAcceptor;
 
 
+    awaitable<void> Accept();
+
+    awaitable<void> CreateClientProcessor(tcp::socket socket);
 
 };
 

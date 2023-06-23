@@ -8,7 +8,9 @@ find_package(asio CONFIG REQUIRED)
 add_definitions(-DASIO_SEPARATE_COMPILATION)
 find_package(protobuf CONFIG REQUIRED)
 
-add_executable(tcp_tunnel_server proto/net_pack.pb.cc server.cpp TunnelListener.cpp asio_impl.cpp Gateway.cpp)
+include_directories(./)
+
+add_executable(tcp_tunnel_server proto/net_pack.pb.cc server/server.cpp server/TunnelListener.cpp asio_impl.cpp server/Gateway.cpp server/Pool.cpp server/Pool.h server/ClientProcess.cpp server/ClientProcess.h server/ClientProcess.cpp)
 add_executable(tcp_tunnel_client proto/net_pack.pb.cc client.cpp asio_impl.cpp)
 
 target_link_libraries(tcp_tunnel_server PRIVATE asio::asio protobuf::libprotobuf)
