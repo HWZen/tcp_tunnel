@@ -11,11 +11,12 @@ using AcceptorPool = Pool<tcp::acceptor>;
 using namespace std::chrono_literals;
 
 
-awaitable<void> TunnelListener::ClientCallback(const net::pack& pack)
+awaitable<void> TunnelListener::ProcessPack(const net::pack& pack)
 {
     switch (pack.type()){
     case net::pack_Type_connect:
         // client's ark
+        co_spawn(co_await this_coro::executor, ResponseNewConnection(pack), asio::detached);
         break;
     case net::pack_Type_disconnect:{
         std::lock_guard ul{connectionMutex};
@@ -23,7 +24,7 @@ awaitable<void> TunnelListener::ClientCallback(const net::pack& pack)
         break;
     }
     case net::pack_Type_translate:
-        SendToConnection(pack);
+        co_spawn(co_await this_coro::executor, SendToConnection(pack), asio::detached);
         break;
     default:
         break;
@@ -50,14 +51,8 @@ awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
     }
     ul.unlock();
 
-    // set buffers sequence
-    std::vector<asio::const_buffer> buffers;
-    uint64_t len = pack.ByteSizeLong();
-    buffers.emplace_back(asio::buffer(&len, sizeof(len)));
-    buffers.emplace_back(asio::buffer(&pack, len));
-
     // send to connection
-    auto [ec, _] = co_await it->second.async_write_some(buffers, use_nothrow_awaitable);
+    auto [ec, _] = co_await it->second.async_write_some(asio::buffer(pack.data()), use_nothrow_awaitable);
     if (ec){
         // log it
         // send client that this connection was disconnected
@@ -112,6 +107,35 @@ TunnelListener::TunnelListener(const asio::any_io_executor& io_context,
 
 TunnelListener::~TunnelListener() {
     Pool<tcp::acceptor>::GetInstance().ReleaseAcceptor(port);
+}
+
+awaitable<void> TunnelListener::ResponseNewConnection(const net::pack &response) {
+    // check if response port is in waitAckConnection or connection
+    std::unique_lock ul1{waitAckConnectionMutex, std::defer_lock};
+    std::unique_lock ul2{connectionMutex, std::defer_lock};
+    std::lock(ul1, ul2);
+
+    if (!waitAckConnection.contains(response.id()) && !connection.contains(response.id())) {
+        // log it
+        // send client to disconnect
+        net::pack pack;
+        pack.set_id(response.id());
+        pack.set_port(response.port());
+        pack.set_type(net::pack::Type::pack_Type_disconnect);
+        ul1.unlock();
+        ul2.unlock();
+        co_await RequireSendToClient(pack);
+        co_return ;
+    }
+
+    if (connection.contains(response.id())){
+        // log it
+        // unexplained circumstances
+        co_return ;
+    }
+
+    // move socket from waitAckConnection to connection
+    connection.insert(waitAckConnection.extract(response.id()));
 }
 
 

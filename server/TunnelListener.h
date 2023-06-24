@@ -27,26 +27,29 @@ public:
             std::function<void()> RequireDestroy
             );
 
+
+
+    awaitable<void> ProcessPack(const net::pack& pack);
+
+    ~TunnelListener();
+private:
+    awaitable<void> SendToConnection(const net::pack& pack);
+
+    awaitable<void> ResponseNewConnection(const net::pack &response);
+
+private:
     uint16_t port;
     std::atomic_int64_t cnt{0};
 
     std::mutex connectionMutex;
     std::unordered_map<uint64_t, tcp::socket> connection;
+
     std::mutex waitAckConnectionMutex;
     std::unordered_map<uint64_t, tcp::socket> waitAckConnection;
 
     std::function<awaitable<void>(uint64_t)> RequireNewConnection{};
-
-    awaitable<void> ClientCallback(const net::pack& pack);
-
-    awaitable<void> SendToConnection(const net::pack& pack);
-
     std::function<awaitable<void>(const net::pack &)> RequireSendToClient{};
-
     std::function<void()> RequireDestroy;
-
-    ~TunnelListener();
-
 };
 
 
