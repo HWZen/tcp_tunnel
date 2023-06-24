@@ -6,8 +6,8 @@
 #include "Pool.h"
 using AcceptorPool = Pool<tcp::acceptor>;
 
+// TODO: One client should only have one tunnel
 awaitable<void> ClientProcess::operator()() {
-    constexpr size_t bufferSize{1024 * 1024 * 2};
     std::vector<char> buffer(bufferSize);
 
 
@@ -61,10 +61,7 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
         response->set_status(net::listen_response::other_host_listening);
 
         uint64_t sendLen{responseData.ByteSizeLong()};
-        std::array<asio::const_buffer, 2> bufferSequence{
-            asio::buffer(&sendLen, sizeof(sendLen)),
-            asio::buffer(responseData.SerializeAsString())
-        };
+        auto bufferSequence{MakeSendSeq(&sendLen, responseData)};
         auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
         if (ec) {
             // log it
@@ -84,10 +81,7 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
         response->set_status(net::listen_response::other_host_listening);
 
         uint64_t sendLen{responseData.ByteSizeLong()};
-        std::array<asio::const_buffer, 2> bufferSequence{
-            asio::buffer(&sendLen, sizeof(sendLen)),
-            asio::buffer(responseData.SerializeAsString())
-        };
+        auto bufferSequence{MakeSendSeq(&sendLen, responseData)};
         auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
         if (ec) {
             // log it
@@ -109,11 +103,8 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
         pack.set_port(port);
         pack.set_type(net::pack::connect);
 
-        uint64_t len{data.ByteSizeLong()};
-        std::array<asio::const_buffer, 2> bufferSequence{
-            asio::buffer(&len, sizeof(len)),
-            asio::buffer(data.SerializeAsString())
-        };
+        uint64_t len = data.ByteSizeLong();
+        auto bufferSequence{MakeSendSeq(&len, data)};
 
         auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
         if (ec){
@@ -130,10 +121,7 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
         *data.mutable_pack() = pack;
 
         uint64_t len{data.ByteSizeLong()};
-        std::array<asio::const_buffer, 2> bufferSequence{
-            asio::buffer(&len, sizeof(len)),
-            asio::buffer(data.SerializeAsString())
-        };
+        auto bufferSequence{MakeSendSeq(&len, data)};
 
         auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
         if (ec){
@@ -171,10 +159,7 @@ awaitable<void> ClientProcess::ProcessPackage(const net::pack &pack) {
         response.set_status(net::listen_response::listen_fail);
 
         uint64_t len{data.ByteSizeLong()};
-        std::array<asio::const_buffer, 2> bufferSequence{
-                asio::buffer(&len, sizeof(len)),
-                asio::buffer(data.SerializeAsString())
-        };
+        auto bufferSequence{MakeSendSeq(&len, data)};
 
         auto [ec,_] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
         if (ec){
@@ -185,7 +170,7 @@ awaitable<void> ClientProcess::ProcessPackage(const net::pack &pack) {
 
     // send to tunnel
     auto &tunnel{*usedTunnels.at(pack.port())};
-    co_await tunnel.SendToConnection(pack);
+    co_await tunnel.ProcessPack(pack);
 
 
     co_return;

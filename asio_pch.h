@@ -36,6 +36,28 @@ inline awaitable<void> timeout(steady_clock::duration duration)
     co_await timer.async_wait(use_nothrow_awaitable);
 }
 
+inline auto MakeSendSeq(uint64_t* len, auto&& proto_msg){
+    return std::array<asio::const_buffer, 2>{
+        asio::buffer(len, sizeof(*len)),
+        asio::buffer(&proto_msg, *len)
+    };
+}
+
+inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& socket){
+    uint64_t len;
+    auto [ec1, len1] = co_await socket.async_read_some(asio::buffer(&len, sizeof(len)), use_nothrow_awaitable);
+    if (ec1){
+        co_return std::make_tuple(ec1, std::vector<char>{});
+    }
+    std::vector<char> buf(len);
+    auto [ec2, len2] = co_await socket.async_read_some(asio::buffer(buf), use_nothrow_awaitable);
+    if (ec2){
+        co_return std::make_tuple(ec2, std::vector<char>{});
+    }
+    co_return std::make_tuple(asio::error_code{}, std::move(buf));
+}
+
+constexpr size_t bufferSize{1024 * 1024 * 2};
 
 
 
