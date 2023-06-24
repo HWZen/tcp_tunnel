@@ -43,4 +43,8 @@ awaitable<void> Gateway::CreateClientProcessor(tcp::socket socket) {
     co_return;
 }
 
+size_t Gateway::spin() {
+    return ioContext.run();
+}
+
 

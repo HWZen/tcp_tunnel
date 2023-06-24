@@ -7,6 +7,7 @@
 #include "TunnelListener.h"
 #include "Pool.h"
 #include <chrono>
+using AcceptorPool = Pool<tcp::acceptor>;
 using namespace std::chrono_literals;
 
 
@@ -43,7 +44,7 @@ awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
         response.set_id(pack.id());
         response.set_type(net::pack::Type::pack_Type_disconnect);
 
-        RequireSendToClient(response);
+        co_await RequireSendToClient(response);
 
         co_return;
     }
@@ -64,7 +65,7 @@ awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
         response.set_id(pack.id());
         response.set_type(net::pack::Type::pack_Type_disconnect);
 
-        RequireSendToClient(response);
+        co_await RequireSendToClient(response);
 
         // remove connection
         ul.lock();
@@ -73,20 +74,21 @@ awaitable<void> TunnelListener::SendToConnection(const net::pack& pack)
 
 }
 
-TunnelListener::TunnelListener(asio::io_context& io_context,
-        std::shared_ptr<tcp::acceptor>,
+TunnelListener::TunnelListener(const asio::any_io_executor& io_context,
+        uint16_t port,
         std::function<awaitable<void>(uint64_t)> NewConnection,
         std::function<awaitable<void>(const net::pack&)> SendToClient,
         std::function<void()> RequireDestroy
         ):
-        acceptor(std::move(acceptor)),
+        port(port),
         RequireNewConnection(std::move(NewConnection)),
         RequireSendToClient(std::move(SendToClient)),
         RequireDestroy(std::move(RequireDestroy))
 {
     co_spawn(io_context, [this]() -> awaitable<void> {
         for(;;) {
-            auto [ec, socket] = co_await this->acceptor->async_accept(use_nothrow_awaitable);
+            auto acceptor = AcceptorPool::GetInstance().GetAcceptor(this->port);
+            auto [ec, socket] = co_await acceptor->async_accept(use_nothrow_awaitable);
             if (ec) {
                 // log it
                 this->RequireDestroy();
@@ -109,7 +111,7 @@ TunnelListener::TunnelListener(asio::io_context& io_context,
 }
 
 TunnelListener::~TunnelListener() {
-    Pool<tcp::acceptor>::GetInstance().ReleaseAcceptor(acceptor->local_endpoint().port());
+    Pool<tcp::acceptor>::GetInstance().ReleaseAcceptor(port);
 }
 
 

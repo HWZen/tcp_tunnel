@@ -27,6 +27,8 @@ public:
 
     awaitable<void> CreateClientProcessor(tcp::socket socket);
 
+    size_t spin();
+
 };
 
 

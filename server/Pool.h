@@ -6,6 +6,7 @@
 #define TCP_TUNNEL_POOL_H
 #include <unordered_map>
 #include <mutex>
+#include <memory>
 
 template<class Ty>
 class Pool  {

@@ -3,4 +3,8 @@
 // Copyright (c) 2023 HWZen All rights reserved.
 // MIT License
 //
-int main(){}
+#include "Gateway.h"
+int main(){
+    Gateway gateway{ 8080 };
+    gateway.spin();
+}

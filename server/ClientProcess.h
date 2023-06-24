@@ -5,13 +5,14 @@
 #ifndef TCP_TUNNEL_CLIENTPROCESS_H
 #define TCP_TUNNEL_CLIENTPROCESS_H
 #include "asio_pch.h"
-#include <unordered_set>
 #include "proto/net_pack.pb.h"
+#include "server/TunnelListener.h"
+#include <unordered_set>
 
 class ClientProcess {
 public:
     tcp::socket socket;
-    std::unordered_set<uint16_t> usedPort{};
+    std::unordered_map<uint16_t, std::unique_ptr<TunnelListener>> usedTunnels{};
 
     awaitable<void> operator()();
 
