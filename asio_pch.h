@@ -49,7 +49,7 @@ inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& 
     if (ec1){
         co_return std::make_tuple(ec1, std::vector<char>{});
     }
-    std::vector<char> buf(len);
+    std::vector<char> buf(static_cast<size_t>(len));
     auto [ec2, len2] = co_await socket.async_read_some(asio::buffer(buf), use_nothrow_awaitable);
     if (ec2){
         co_return std::make_tuple(ec2, std::vector<char>{});
