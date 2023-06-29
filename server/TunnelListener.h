@@ -8,6 +8,7 @@
 #define TCP_TUNNEL_TUNNELLISTENER_H
 #include "proto/net_pack.pb.h"
 #include "asio_pch.h"
+#include "Logger.h"
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -33,9 +34,10 @@ public:
 
     ~TunnelListener();
 private:
-    awaitable<void> SendToConnection(const net::pack& pack);
+    awaitable<void> SendToConnection(net::pack pack);
 
-    awaitable<void> ResponseNewConnection(const net::pack &response);
+    awaitable<void> ResponseNewConnection(net::pack response);
+    awaitable<void> RecvFromConnection(uint64_t id);
 
 private:
     uint16_t port;
@@ -50,6 +52,8 @@ private:
     std::function<awaitable<void>(uint64_t)> RequireNewConnection{};
     std::function<awaitable<void>(const net::pack &)> RequireSendToClient{};
     std::function<void()> RequireDestroy;
+
+    Logger logger{"TunnelListener"};
 };
 
 

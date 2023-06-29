@@ -21,6 +21,8 @@
 #include <asio/read_until.hpp>
 #include <asio/bind_allocator.hpp>
 #include <asio/recycling_allocator.hpp>
+#include <asio/read.hpp>
+#include <iostream>
 using asio::awaitable;
 using asio::buffer;
 using asio::co_spawn;
@@ -36,12 +38,33 @@ inline awaitable<void> timeout(steady_clock::duration duration)
     co_await timer.async_wait(use_nothrow_awaitable);
 }
 
-inline auto MakeSendSeq(uint64_t* len, auto&& proto_msg){
-    return std::array<asio::const_buffer, 2>{
-        asio::buffer(len, sizeof(*len)),
-        asio::buffer(&proto_msg, *len)
-    };
+struct SendSequence : public std::array<asio::const_buffer, 2> {
+    uint64_t len;
+    std::string buf;
+    void ref(){
+        this->operator[](0) = asio::buffer(&len, sizeof(len));
+        this->operator[](1) = asio::buffer(buf);
+    }
+};
+
+
+inline auto MakeSendSeq(auto&& proto_msg){
+    SendSequence res;
+    res.len = proto_msg.ByteSizeLong();
+    res.buf = proto_msg.SerializeAsString();
+    return res;
 }
+
+inline awaitable<std::tuple<asio::error_code, uint64_t>> SendMsg(auto& socket, auto&& proto_msg){
+    SendSequence bufferSeq;
+    bufferSeq.len = proto_msg.ByteSizeLong();
+    bufferSeq.buf = proto_msg.SerializeAsString();
+    bufferSeq[0] = asio::buffer(&bufferSeq.len, sizeof(bufferSeq.len));
+    bufferSeq[1] = asio::buffer(bufferSeq.buf);
+    auto [ec, len] = co_await socket.async_write_some(bufferSeq, use_nothrow_awaitable);
+    co_return std::make_tuple(ec, len);
+}
+
 
 inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& socket){
     uint64_t len;
@@ -50,7 +73,8 @@ inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& 
         co_return std::make_tuple(ec1, std::vector<char>{});
     }
     std::vector<char> buf(static_cast<size_t>(len));
-    auto [ec2, len2] = co_await socket.async_read_some(asio::buffer(buf), use_nothrow_awaitable);
+    auto [ec2, len2] = co_await asio::async_read(socket, asio::buffer(buf), use_nothrow_awaitable);
+    std::cout << len << " : " << len2 << std::endl;
     if (ec2){
         co_return std::make_tuple(ec2, std::vector<char>{});
     }

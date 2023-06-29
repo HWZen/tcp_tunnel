@@ -8,6 +8,7 @@
 #define TCP_TUNNEL_GATEWAY_H
 #include "asio_pch.h"
 #include "TunnelListener.h"
+#include "Logger.h"
 #include <unordered_set>
 #include <memory>
 
@@ -19,8 +20,7 @@ public:
             uint16_t port
             );
 
-    asio::io_context ioContext;
-    std::shared_ptr<tcp::acceptor> listenAcceptor;
+
 
 
     awaitable<void> Accept();
@@ -29,6 +29,10 @@ public:
 
     size_t spin();
 
+private:
+    asio::io_context ioContext;
+    std::shared_ptr<tcp::acceptor> listenAcceptor;
+    Logger logger{"Gateway"};
 };
 
 

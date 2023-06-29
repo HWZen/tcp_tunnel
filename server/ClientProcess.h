@@ -7,19 +7,22 @@
 #include "asio_pch.h"
 #include "proto/net_pack.pb.h"
 #include "server/TunnelListener.h"
+#include "Logger.h"
 #include <unordered_set>
 
 class ClientProcess {
 public:
-    tcp::socket socket;
-    std::unordered_map<uint16_t, std::unique_ptr<TunnelListener>> usedTunnels{};
-
+    ClientProcess(tcp::socket socket) : socket(std::move(socket)) {}
     awaitable<void> operator()();
 
-    awaitable<void> ProcessRequest(const net::listen_request &request);
+    awaitable<void> ProcessRequest(net::listen_request request);
 
-    awaitable<void> ProcessPackage(const net::pack &pack);
+    awaitable<void> ProcessPackage(net::pack pack);
 
+private:
+    tcp::socket socket;
+    std::unordered_map<uint16_t, std::unique_ptr<TunnelListener>> usedTunnels{};
+    Logger logger{"ClientProcess"};
 };
 
 

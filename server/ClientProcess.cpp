@@ -8,30 +8,18 @@ using AcceptorPool = Pool<tcp::acceptor>;
 
 // TODO: One client should only have one tunnel
 awaitable<void> ClientProcess::operator()() {
-    std::vector<char> buffer(bufferSize);
-
-
+    TRACE_FUNC(logger);
     for(;;){
-        uint64_t recvLen{0};
-        auto [ec, len] = co_await socket.async_read_some(asio::buffer(buffer), use_nothrow_awaitable);
-        if (ec) {
-            // log it
-            break;
-        }
-        if (recvLen > bufferSize){
-            // log it
-            break;
-        }
-
-        auto [ec2, len2] = co_await socket.async_read_some(asio::buffer(buffer.data(), recvLen), use_nothrow_awaitable);
-        if (ec2){
-            // log it
+        auto [ec, buffer] = co_await RecvMsg(socket);
+        LOG_DEBUG(logger, "recv {} bytes", buffer.size());
+        if (ec){
+            LOG_ERROR(logger, "recv error: {}", ec.message());
             break;
         }
 
         net::data data;
-        if (!data.ParseFromArray(buffer.data(), len2)){
-            // log it
+        if (!data.ParseFromArray(buffer.data(), static_cast<int>(buffer.size()))){
+            LOG_ERROR(logger, "parse data error");
             continue;
         }
 
@@ -42,49 +30,48 @@ awaitable<void> ClientProcess::operator()() {
             co_spawn(co_await this_coro::executor, ProcessPackage(data.pack()), asio::detached);
         }
         else{
-            // log it
+            LOG_WARN(logger, "unknown data type");
         }
-
-
     }
+    LOG_INFO(logger, "ClientProcess() exit");
 }
 
-awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request) {
+awaitable<void> ClientProcess::ProcessRequest(net::listen_request request) try {
     // Check if port is used
-    if (usedTunnels.find(request.port()) != usedTunnels.end()
-        || AcceptorPool::GetInstance().HasAcceptor(request.port()))
+    TRACE_FUNC(logger);
+    LOG_INFO(logger, "requesting port:{}", request.port());
+    if (usedTunnels.find(static_cast<uint16_t>(request.port())) != usedTunnels.end()
+        || AcceptorPool::GetInstance().HasAcceptor(static_cast<uint16_t>(request.port())))
     {
-        // log it
+        LOG_ERROR(logger, "port {} is used", request.port());
         net::data responseData;
         auto response{responseData.mutable_listen_response()};
         response->set_port(request.port());
         response->set_status(net::listen_response::other_host_listening);
 
-        uint64_t sendLen{responseData.ByteSizeLong()};
-        auto bufferSequence{MakeSendSeq(&sendLen, responseData)};
-        auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
+        auto [ec, _] = co_await SendMsg(socket, responseData);
         if (ec) {
-            // log it
+            LOG_ERROR(logger, "send error: {}", ec.message());
             co_return;
         }
-
 
     }
 
     // Create acceptor
-    auto acceptor{std::make_shared<tcp::acceptor>(co_await this_coro::executor, tcp::endpoint(tcp::v4(), request.port()))};
-    if(!AcceptorPool::GetInstance().AddAcceptor(request.port(), std::move(acceptor))){
+    auto acceptor{std::make_shared<tcp::acceptor>(co_await this_coro::executor, tcp::endpoint(tcp::v4(),
+                                                                                              static_cast<asio::ip::port_type>(request.port())))};
+
+    if(!AcceptorPool::GetInstance().AddAcceptor(static_cast<uint16_t>(request.port()), std::move(acceptor))){
         // log it
+        LOG_ERROR(logger, "add acceptor error");
         net::data responseData;
         auto response{responseData.mutable_listen_response()};
         response->set_port(request.port());
         response->set_status(net::listen_response::other_host_listening);
 
-        uint64_t sendLen{responseData.ByteSizeLong()};
-        auto bufferSequence{MakeSendSeq(&sendLen, responseData)};
-        auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
+        auto [ec, _] = co_await SendMsg(socket, responseData);
         if (ec) {
-            // log it
+            LOG_ERROR(logger, "send error: {}", ec.message());
             co_return;
         }
     }
@@ -94,8 +81,10 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
 
     auto RequireNewConnectionFunc = [
             port = request.port(),
-            &socket = this->socket
+            &socket = this->socket,
+            &logger = this->logger
             ](uint64_t id) -> awaitable<void>{
+        TRACE_FUNC(logger);
         // Send to client
         net::data data;
         auto& pack{*data.mutable_pack()};
@@ -103,29 +92,25 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
         pack.set_port(port);
         pack.set_type(net::pack::connect);
 
-        uint64_t len = data.ByteSizeLong();
-        auto bufferSequence{MakeSendSeq(&len, data)};
 
-        auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
+        auto [ec, _] = co_await SendMsg(socket, data);
         if (ec){
-            // log it
+            LOG_ERROR(logger, "send error: {}", ec.message());
         }
-
         // client will respond
     };
 
     auto RequireSendToClientFunc = [
-            &socket = this->socket
+            &socket = this->socket,
+            &logger = this->logger
             ](const net::pack &pack) -> awaitable<void>{
+        TRACE_FUNC(logger);
         net::data data;
         *data.mutable_pack() = pack;
 
-        uint64_t len{data.ByteSizeLong()};
-        auto bufferSequence{MakeSendSeq(&len, data)};
-
-        auto [ec, _] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
+        auto [ec, _] = co_await SendMsg(socket, data);
         if (ec){
-            // log it
+            LOG_ERROR(logger, "send error: {}", ec.message());
         }
 
     };
@@ -134,7 +119,8 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
             this,
             port = request.port()
             ]() -> void{
-        usedTunnels.erase(port);
+        TRACE_FUNC(logger);
+        usedTunnels.erase(static_cast<uint16_t>(port));
     };
 
     auto tunnel = std::make_unique<TunnelListener>(co_await this_coro::executor,
@@ -145,33 +131,49 @@ awaitable<void> ClientProcess::ProcessRequest(const net::listen_request &request
                                                    );
 
     usedTunnels.emplace(request.port(), std::move(tunnel));
+
+    LOG_INFO(logger,"Listen new port: {}", request.port());
+
+    // send response
+    net::data responseData;
+    auto& response{*responseData.mutable_listen_response()};
+    response.set_port(request.port());
+    response.set_status(net::listen_response::success);
+
+    auto [ec, _] = co_await SendMsg(socket, responseData);
+    if (ec){
+        LOG_ERROR(logger, "send error: {}", ec.message());
+        usedTunnels.erase(static_cast<uint16_t>(request.port()));
+    }
+
+    co_return;
+}
+catch(std::exception& e){
+    LOG_CRITICAL(logger, "catch exception: {}", e.what());
     co_return;
 }
 
-awaitable<void> ClientProcess::ProcessPackage(const net::pack &pack) {
+awaitable<void> ClientProcess::ProcessPackage(net::pack pack) {
+    TRACE_FUNC(logger);
     // check pack illegal
-    if (!usedTunnels.contains(pack.port())){
-        // log it
+    if (!usedTunnels.contains(static_cast<uint16_t>(pack.port()))){
+        LOG_ERROR(logger, "port {} not exist", pack.port());
         // send to client that server fail
         net::data data;
         auto &response{*data.mutable_listen_response()};
         response.set_port(pack.port());
         response.set_status(net::listen_response::listen_fail);
 
-        uint64_t len{data.ByteSizeLong()};
-        auto bufferSequence{MakeSendSeq(&len, data)};
-
-        auto [ec,_] = co_await socket.async_write_some(bufferSequence, use_nothrow_awaitable);
+        auto [ec,_] = co_await SendMsg(socket, data);
         if (ec){
-            // log it
+            LOG_ERROR(logger, "send error: {}", ec.message());
         }
         co_return;
     }
 
     // send to tunnel
-    auto &tunnel{*usedTunnels.at(pack.port())};
+    auto &tunnel{*usedTunnels.at(static_cast<uint16_t>(pack.port()))};
     co_await tunnel.ProcessPack(pack);
-
 
     co_return;
 }
