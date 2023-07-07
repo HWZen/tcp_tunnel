@@ -10,8 +10,10 @@
 #warning "ASIO_SEPARATE_COMPILATION no define, please check CMakeLists.txt"
 #endif // ASIO_SEPARATE_COMPILATION
 
+#ifdef _WIN32
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0601 // win7
+#endif
 #endif
 
 #include <asio/ip/tcp.hpp>
@@ -62,6 +64,7 @@ inline awaitable<std::tuple<asio::error_code, uint64_t>> SendMsg(auto& socket, a
     bufferSeq[0] = asio::buffer(&bufferSeq.len, sizeof(bufferSeq.len));
     bufferSeq[1] = asio::buffer(bufferSeq.buf);
     auto [ec, len] = co_await socket.async_write_some(bufferSeq, use_nothrow_awaitable);
+    std::cout << bufferSeq.buf << std::endl;
     co_return std::make_tuple(ec, len);
 }
 
@@ -75,6 +78,7 @@ inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& 
     std::vector<char> buf(static_cast<size_t>(len));
     auto [ec2, len2] = co_await asio::async_read(socket, asio::buffer(buf), use_nothrow_awaitable);
     std::cout << len << " : " << len2 << std::endl;
+    std::cout << std::string_view(buf.begin(), buf.end()) << std::endl;
     if (ec2){
         co_return std::make_tuple(ec2, std::vector<char>{});
     }
