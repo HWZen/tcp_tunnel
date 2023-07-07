@@ -8,11 +8,13 @@ Agent::Agent(
         std::string_view proxyAddress,
         uint16_t proxyPort,
         std::string_view serverAddress,
-        uint16_t serverPort):
+        uint16_t serverPort,
+        uint16_t requestPort):
         proxyAddress(proxyAddress),
         proxyPort(proxyPort),
         serverAddress(serverAddress),
         serverPort(serverPort),
+        requestPort(requestPort),
         advertiser(ioContext,
                    [this](uint64_t id) -> awaitable<bool> { co_return co_await this->NewConnection(id); },
                    [this](uint64_t id) -> awaitable<void> { co_await this->DisConnection(id); },
@@ -20,13 +22,13 @@ Agent::Agent(
 
 {
     TRACE_FUNC(logger);
-    LOG_INFO(logger, "proxyAddress: {}, proxyPort: {}, serverAddress: {}, serverPort: {}",
-             proxyAddress, proxyPort, serverAddress, serverPort);
+    LOG_INFO(logger, "proxyAddress: {}, proxyPort: {}, serverAddress: {}, serverPort: {}, requestPort: {}",
+             proxyAddress, proxyPort, serverAddress, serverPort, requestPort);
 }
 
 void Agent::Connect() {
     TRACE_FUNC(logger);
-    auto ec{advertiser.connect(serverAddress, serverPort, proxyPort)};
+    auto ec{advertiser.connect(serverAddress, serverPort, requestPort)};
     if (ec){
         LOG_ERROR(logger, "connect to server failed: {}", ec.message());
         throw std::logic_error(ec.message());

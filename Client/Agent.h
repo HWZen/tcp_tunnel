@@ -15,7 +15,8 @@ public:
             std::string_view proxyAddress,
             uint16_t proxyPort,
             std::string_view serverAddress,
-            uint16_t serverPort
+            uint16_t serverPort,
+            uint16_t requestPort
             );
 
     void Connect();
@@ -30,6 +31,7 @@ private:
     uint16_t proxyPort;
     std::string serverAddress;
     uint16_t serverPort;
+    uint16_t requestPort;
 
     asio::io_context ioContext;
     Advertiser advertiser;

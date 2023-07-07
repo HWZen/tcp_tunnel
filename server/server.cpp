@@ -4,7 +4,15 @@
 // MIT License
 //
 #include "Gateway.h"
-int main(){
-    Gateway gateway{ 8080 };
+#include <iostream>
+int main(int argc, char **argv) try{
+    uint16_t port{8080};
+    if (argc > 1)
+        port = std::stoi(argv[1]);
+    Gateway gateway{ port };
     gateway.spin();
+}
+catch (std::exception &e){
+    std::cout << "Catch exception: " << e.what() << std::endl;
+
 }
