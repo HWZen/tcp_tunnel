@@ -194,10 +194,10 @@ awaitable<void> Advertiser::RecvFromServer() {
                         else
                             pack.set_type(net::pack::disconnect);
 
-                        auto [ec, _] = co_await SendMsg(server, data);
+                        auto [ec2, _] = co_await SendMsg(server, data);
 
-                        if (ec){
-                            LOG_ERROR(logger, "send server response failed, ec: {}", ec.message());
+                        if (ec2){
+                            LOG_ERROR(logger, "send server response failed, ec: {}", ec2.message());
                         }
 
                     }, asio::detached);

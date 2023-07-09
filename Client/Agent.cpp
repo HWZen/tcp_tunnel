@@ -82,7 +82,6 @@ awaitable<void> Agent::RecvData(uint64_t id, std::string recvData) {
         connections.erase(id);
         co_await advertiser.DisConnection(id);
     }
-    co_await connection.async_write_some(asio::buffer(recvData), use_nothrow_awaitable);
 }
 
 awaitable<void> Agent::RecvFromConnection(uint64_t id) {
