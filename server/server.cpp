@@ -11,6 +11,7 @@ int main(int argc, char **argv) try{
         port = std::stoi(argv[1]);
     Gateway gateway{ port };
     gateway.spin();
+    std::cout << "gateway exit" << std::endl;
 }
 catch (std::exception &e){
     std::cout << "Catch exception: " << e.what() << std::endl;

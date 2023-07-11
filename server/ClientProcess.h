@@ -12,7 +12,7 @@
 
 class ClientProcess {
 public:
-    ClientProcess(tcp::socket socket) : socket(std::move(socket)) {}
+    explicit ClientProcess(tcp::socket socket) : socket(std::move(socket)) {}
     awaitable<void> operator()();
 
     awaitable<void> ProcessRequest(net::listen_request request);
@@ -21,7 +21,7 @@ public:
 
 private:
     tcp::socket socket;
-    std::unordered_map<uint16_t, std::unique_ptr<TunnelListener>> usedTunnels{};
+    std::unordered_map<uint16_t, std::weak_ptr<TunnelListener>> usedTunnels{};
     Logger logger{"ClientProcess"};
 };
 

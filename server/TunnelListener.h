@@ -21,16 +21,17 @@
 
 class TunnelListener {
 public:
-    TunnelListener(const asio::any_io_executor &io_context,
-            uint16_t port,
-            std::function<awaitable<void>(uint64_t)> NewConnection,
-            std::function<awaitable<void>(const net::pack &)> SendToClient,
-            std::function<void()> RequireDestroy
-            );
+    TunnelListener(uint16_t port, std::function<awaitable<void>(uint64_t)> NewConnection,
+                   std::function<awaitable<void>(const net::pack &)> SendToClient,
+                   std::function<void()> RequireDestroy);
 
 
 
     awaitable<void> ProcessPack(const net::pack& pack);
+
+    awaitable<void> operator()();
+
+    awaitable<void> Destroy();
 
     ~TunnelListener();
 private:

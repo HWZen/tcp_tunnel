@@ -79,49 +79,15 @@ awaitable<void> TunnelListener::SendToConnection(net::pack pack)
 
 }
 
-TunnelListener::TunnelListener(const asio::any_io_executor& io_context,
-        uint16_t port,
-        std::function<awaitable<void>(uint64_t)> NewConnection,
-        std::function<awaitable<void>(const net::pack&)> SendToClient,
-        std::function<void()> RequireDestroy
-        ):
+TunnelListener::TunnelListener(uint16_t port, std::function<awaitable<void>(uint64_t)> NewConnection,
+                               std::function<awaitable<void>(const net::pack &)> SendToClient,
+                               std::function<void()> RequireDestroy) :
         port(port),
         RequireNewConnection(std::move(NewConnection)),
         RequireSendToClient(std::move(SendToClient)),
         RequireDestroy(std::move(RequireDestroy))
 {
     TRACE_FUNC(logger);
-    co_spawn(io_context, [this]() -> awaitable<void> {
-        TRACE_FUNC(logger);
-        auto acceptor = AcceptorPool::GetInstance().GetAcceptor(this->port);
-        if (!acceptor){
-            LOG_ERROR(logger, "Get acceptor(from port {}) failed)", this->port);
-            co_return ;
-        }
-        for(;;) {
-            auto [ec, socket] = co_await acceptor->async_accept(use_nothrow_awaitable);
-            if (ec) {
-                LOG_ERROR(logger, "accept error: {}", ec.message());
-                this->RequireDestroy();
-                co_return;
-            }
-            LOG_INFO(logger, "recv new connection");
-            auto this_cnt = cnt++;
-            std::unique_lock ul{waitAckConnectionMutex};
-            this->waitAckConnection.emplace(this_cnt, std::move(socket));
-            ul.unlock();
-
-            co_spawn(co_await this_coro::executor, this->RequireNewConnection(this_cnt), asio::detached);
-            co_spawn(co_await this_coro::executor, [this_cnt, this]() -> awaitable<void> {
-                  co_await timeout(5s);
-                  std::lock_guard lg{this->waitAckConnectionMutex};
-                  auto success = this->waitAckConnection.erase(this_cnt);
-                  if (success > 0)
-                      LOG_ERROR(logger, "id:{} timeout", this_cnt);
-            }, asio::detached);
-        }
-    }, asio::detached);
-
 }
 
 TunnelListener::~TunnelListener() {
@@ -185,7 +151,7 @@ awaitable<void> TunnelListener::RecvFromConnection(uint64_t id) {
             connection.erase(id);
             co_return;
         }
-        LOG_INFO(logger, "recv {} bytes from id:{}", size, id);
+        LOG_TRACE(logger, "recv {} bytes from id:{}", size, id);
 
         net::pack pack;
         pack.set_id(id);
@@ -195,6 +161,55 @@ awaitable<void> TunnelListener::RecvFromConnection(uint64_t id) {
 
         co_await RequireSendToClient(pack);
     }
+}
+
+awaitable<void> TunnelListener::operator()() {
+    TRACE_FUNC(logger);
+    auto acceptor = AcceptorPool::GetInstance().GetAcceptor(this->port);
+    if (!acceptor){
+        LOG_ERROR(logger, "Get acceptor(from port {}) failed)", this->port);
+        co_return ;
+    }
+    for(;;) {
+        auto [ec, socket] = co_await acceptor->async_accept(use_nothrow_awaitable);
+        if (ec) {
+            LOG_ERROR(logger, "accept error: {}", ec.message());
+            this->RequireDestroy();
+            co_return;
+        }
+        LOG_INFO(logger, "recv new connection");
+        auto this_cnt = cnt++;
+        std::unique_lock ul{waitAckConnectionMutex};
+        this->waitAckConnection.emplace(this_cnt, std::move(socket));
+        ul.unlock();
+
+        co_spawn(co_await this_coro::executor, this->RequireNewConnection(this_cnt), asio::detached);
+        co_spawn(co_await this_coro::executor, [](auto this_cnt, auto self) -> awaitable<void> {
+            co_await timeout(5s);
+            std::lock_guard lg{self->waitAckConnectionMutex};
+            auto success = self->waitAckConnection.erase(this_cnt);
+            if (success > 0)
+                LOG_ERROR(self->logger, "id:{} timeout", this_cnt);
+        }(this_cnt, this), asio::detached);
+    }
+
+}
+
+awaitable<void> TunnelListener::Destroy() {
+    TRACE_FUNC(logger);
+    std::unique_lock ul(connectionMutex, std::defer_lock);
+    std::unique_lock ul2(waitAckConnectionMutex, std::defer_lock);
+    std::lock(ul, ul2);
+    for (auto &[_, socket] : connection)
+        socket.close();
+    for (auto &[_, socket] : waitAckConnection)
+        socket.close();
+    ul2.unlock();
+    ul.unlock();
+
+
+    co_await timeout(1s);
+    co_return;
 }
 
 
