@@ -73,7 +73,7 @@ awaitable<void> Agent::RecvData(uint64_t id, std::string recvData) {
         co_await advertiser.DisConnection(id);
         co_return ;
     }
-    LOG_INFO(logger, "recv data from connection {}, size: {}", id, recvData.size());
+    LOG_TRACE(logger, "recv data from connection {}, size: {}", id, recvData.size());
 
     auto& connection{connections.at(id)};
     auto [ec, len] = co_await connection.async_write_some(asio::buffer(recvData), use_nothrow_awaitable);
@@ -97,7 +97,7 @@ awaitable<void> Agent::RecvFromConnection(uint64_t id) {
             co_return;
         }
 
-        LOG_INFO(logger, "read from connection {}, size: {}", id, len);
+        LOG_TRACE(logger, "read from connection {}, size: {}", id, len);
         co_await advertiser.SendToServer(id, std::string_view{buffer.data(), len});
     }
 }

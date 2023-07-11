@@ -207,7 +207,7 @@ awaitable<void> Advertiser::RecvFromServer() {
                 co_spawn(co_await this_coro::executor, ReqDisConnection(pack.id()), asio::detached);
                 break;
             case net::pack::translate:
-                LOG_INFO(logger, "translate data, id: {}", pack.id());
+                LOG_TRACE(logger, "translate data, id: {}", pack.id());
                 co_spawn(co_await this_coro::executor, RecvData(pack.id(), pack.data()), asio::detached);
                 break;
             default:
@@ -239,7 +239,7 @@ awaitable<void> Advertiser::SendToServer(uint64_t id, std::string_view buffer) {
     *pack.mutable_data() = buffer;
 
 
-    LOG_INFO(logger, "send to server, id: {}, len: {}", id, pack.ByteSizeLong());
+    LOG_TRACE(logger, "send to server, id: {}, len: {}", id, pack.ByteSizeLong());
 
     auto [ec, _] = co_await SendMsg(server, data);
     if (ec){

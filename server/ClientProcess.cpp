@@ -11,7 +11,7 @@ awaitable<void> ClientProcess::operator()() {
     TRACE_FUNC(logger);
     for(;;){
         auto [ec, buffer] = co_await RecvMsg(socket);
-        LOG_DEBUG(logger, "recv {} bytes", buffer.size());
+        LOG_TRACE(logger, "recv {} bytes", buffer.size());
         if (ec){
             LOG_ERROR(logger, "recv error: {}", ec.message());
             break;

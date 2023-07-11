@@ -10,7 +10,7 @@ static std::vector<spdlog::sink_ptr>& g_sinks(){
     static std::vector<spdlog::sink_ptr> sinks = [](){
         std::vector<spdlog::sink_ptr> res{};
         auto sink{std::make_shared<spdlog::sinks::stdout_color_sink_mt>()};
-        sink->set_level(static_cast<spdlog::level::level_enum>(spdlog::level::trace));
+        sink->set_level(static_cast<spdlog::level::level_enum>(spdlog::level::debug));
         res.emplace_back(std::move(sink));
         return res;
     }();
