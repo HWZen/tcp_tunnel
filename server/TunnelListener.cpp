@@ -19,19 +19,27 @@ awaitable<void> TunnelListener::ProcessPack(const net::pack& pack)
         // client's ark
         co_spawn(co_await this_coro::executor, ResponseNewConnection(pack), asio::detached);
         break;
-    case net::pack_Type_disconnect:{
-        {
-            LOG_INFO(logger, "remove connection id:{}", pack.id());
-            std::unique_lock ul{connectionMutex, std::defer_lock};
-            std::unique_lock ul2{waitAckConnectionMutex, std::defer_lock};
-            std::lock(ul, ul2);
-            waitAckConnection.erase(pack.id());
-            connection.erase(pack.id());
-            break;
-        }
+    case net::pack_Type_disconnect:
+    {
+        LOG_INFO(logger, "remove connection id:{}", pack.id());
+        std::unique_lock ul{connectionMutex, std::defer_lock};
+        std::unique_lock ul2{waitAckConnectionMutex, std::defer_lock};
+        std::lock(ul, ul2);
+        waitAckConnection.erase(pack.id());
+        connection.erase(pack.id());
+        break;
     }
     case net::pack_Type_translate:
         co_spawn(co_await this_coro::executor, SendToConnection(pack), asio::detached);
+        break;
+    case net::pack::ping:
+    {
+        LOG_INFO(logger, "recv ping");
+        net::pack pong;
+        pong.set_type(net::pack::pong);
+        pong.set_port(port);
+        co_spawn(co_await this_coro::executor, RequireSendToClient(pong), asio::detached);
+    }
         break;
     default:
         LOG_WARN(logger, "unknown pack type:{}", pack.type());

@@ -11,7 +11,8 @@ Advertiser::Advertiser(asio::io_context &executor,
         server(executor),
         ReqNewConnection(std::move(NewConnection)),
         ReqDisConnection(std::move(DisConnection)),
-        RecvData(std::move(RecvData))
+        RecvData(std::move(RecvData)),
+        heartBeatPoutTimer(executor)
 {
     TRACE_FUNC(logger);
 }
@@ -78,6 +79,8 @@ asio::error_code Advertiser::connect(std::string_view ServerIp, uint16_t port, u
 
     // start listening
     co_spawn(server.get_executor(), RecvFromServer(), asio::detached);
+    // start heart beat
+    co_spawn(server.get_executor(), HeartBeat(), asio::detached);
 
     this->proxyPort = proxyPort;
     return {};
@@ -210,6 +213,9 @@ awaitable<void> Advertiser::RecvFromServer() {
                 LOG_TRACE(logger, "translate data, id: {}", pack.id());
                 co_spawn(co_await this_coro::executor, RecvData(pack.id(), pack.data()), asio::detached);
                 break;
+            case net::pack::pong:
+                co_await RecvHeardBeatPout();
+                break;
             default:
                 LOG_WARN(logger, "unknown pack type: {}", pack.type());
                 break;
@@ -248,4 +254,48 @@ awaitable<void> Advertiser::SendToServer(uint64_t id, std::string_view buffer) {
 
 
 
+}
+
+awaitable<void> Advertiser::HeartBeat() {
+    TRACE_FUNC(logger);
+    LOG_DEBUG(logger,"in heard beat");
+    using namespace std::chrono_literals;
+    for (;;){
+        if (!heartBeatTimer){
+            LOG_WARN(logger, "heart beat timer not found");
+            co_return;
+        }
+        heartBeatTimer->expires_after(5min);
+        auto [ec] = co_await heartBeatTimer->async_wait(use_nothrow_awaitable);
+        if (ec){
+            continue; // normal, heart beat be canceled
+        }
+
+        // timeout, send heart beat
+        LOG_INFO(logger, "Timeout, send heart beat");
+        heartBeatPoutTimer.expires_after(10s);
+        net::data data;
+        auto& pack{*data.mutable_pack()};
+        pack.set_type(net::pack::ping);
+        pack.set_port(proxyPort);
+        auto [ec2, res] = co_await (heartBeatPoutTimer.async_wait(use_nothrow_awaitable) && SendMsg(server, data));
+        auto& [ec3, _] = res;
+        if (ec3){
+            LOG_ERROR(logger, "send heartbeat failed, ec: {}", ec.message());
+            break;
+        }
+        if (ec2){
+            LOG_DEBUG(logger, "server response heartbeat");
+            continue; // normal, heart beat be canceled
+        }
+        // timeout, The server connection may have been lost and should exit
+        LOG_ERROR(logger, "send heartbeat timeout, server connection may have been lost");
+        server.close();
+    }
+}
+
+awaitable<void> Advertiser::RecvHeardBeatPout() {
+    TRACE_FUNC(logger);
+    heartBeatPoutTimer.cancel();
+    co_return ;
 }

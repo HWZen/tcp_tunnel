@@ -143,20 +143,20 @@ const char descriptor_table_protodef_net_5fpack_2eproto[] PROTOBUF_SECTION_VARIA
   "\014\n\004port\030\001 \001(\r\"\216\001\n\017listen_response\022\014\n\004por"
   "t\030\001 \001(\r\022+\n\006status\030\002 \001(\0162\033.net.listen_res"
   "ponse.Status\"@\n\006Status\022\013\n\007success\020\000\022\017\n\013l"
-  "isten_fail\020\001\022\030\n\024other_host_listening\020\003\"\200"
+  "isten_fail\020\001\022\030\n\024other_host_listening\020\003\"\224"
   "\001\n\004pack\022\n\n\002id\030\001 \001(\004\022\014\n\004port\030\002 \001(\r\022\034\n\004typ"
-  "e\030\003 \001(\0162\016.net.pack.Type\022\014\n\004data\030\004 \001(\014\"2\n"
+  "e\030\003 \001(\0162\016.net.pack.Type\022\014\n\004data\030\004 \001(\014\"F\n"
   "\004Type\022\r\n\ttranslate\020\000\022\013\n\007connect\020\001\022\016\n\ndis"
-  "connect\020\002\"\272\001\n\004data\0220\n\016listen_request\030\001 \001"
-  "(\0132\023.net.listen_requestH\000\210\001\001\0222\n\017listen_r"
-  "esponse\030\002 \001(\0132\024.net.listen_responseH\001\210\001\001"
-  "\022\034\n\004pack\030\003 \001(\0132\t.net.packH\002\210\001\001B\021\n\017_liste"
-  "n_requestB\022\n\020_listen_responseB\007\n\005_packb\006"
-  "proto3"
+  "connect\020\002\022\010\n\004ping\020\003\022\010\n\004pong\020\004\"\272\001\n\004data\0220"
+  "\n\016listen_request\030\001 \001(\0132\023.net.listen_requ"
+  "estH\000\210\001\001\0222\n\017listen_response\030\002 \001(\0132\024.net."
+  "listen_responseH\001\210\001\001\022\034\n\004pack\030\003 \001(\0132\t.net"
+  ".packH\002\210\001\001B\021\n\017_listen_requestB\022\n\020_listen"
+  "_responseB\007\n\005_packb\006proto3"
   ;
 static ::_pbi::once_flag descriptor_table_net_5fpack_2eproto_once;
 const ::_pbi::DescriptorTable descriptor_table_net_5fpack_2eproto = {
-    false, false, 526, descriptor_table_protodef_net_5fpack_2eproto,
+    false, false, 546, descriptor_table_protodef_net_5fpack_2eproto,
     "net_pack.proto",
     &descriptor_table_net_5fpack_2eproto_once, nullptr, 0, 4,
     schemas, file_default_instances, TableStruct_net_5fpack_2eproto::offsets,
@@ -202,6 +202,8 @@ bool pack_Type_IsValid(int value) {
     case 0:
     case 1:
     case 2:
+    case 3:
+    case 4:
       return true;
     default:
       return false;
@@ -212,6 +214,8 @@ bool pack_Type_IsValid(int value) {
 constexpr pack_Type pack::translate;
 constexpr pack_Type pack::connect;
 constexpr pack_Type pack::disconnect;
+constexpr pack_Type pack::ping;
+constexpr pack_Type pack::pong;
 constexpr pack_Type pack::Type_MIN;
 constexpr pack_Type pack::Type_MAX;
 constexpr int pack::Type_ARRAYSIZE;

@@ -97,12 +97,14 @@ enum pack_Type : int {
   pack_Type_translate = 0,
   pack_Type_connect = 1,
   pack_Type_disconnect = 2,
+  pack_Type_ping = 3,
+  pack_Type_pong = 4,
   pack_Type_pack_Type_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
   pack_Type_pack_Type_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
 };
 bool pack_Type_IsValid(int value);
 constexpr pack_Type pack_Type_Type_MIN = pack_Type_translate;
-constexpr pack_Type pack_Type_Type_MAX = pack_Type_disconnect;
+constexpr pack_Type pack_Type_Type_MAX = pack_Type_pong;
 constexpr int pack_Type_Type_ARRAYSIZE = pack_Type_Type_MAX + 1;
 
 const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* pack_Type_descriptor();
@@ -585,6 +587,10 @@ class pack final :
     pack_Type_connect;
   static constexpr Type disconnect =
     pack_Type_disconnect;
+  static constexpr Type ping =
+    pack_Type_ping;
+  static constexpr Type pong =
+    pack_Type_pong;
   static inline bool Type_IsValid(int value) {
     return pack_Type_IsValid(value);
   }

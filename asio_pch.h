@@ -56,6 +56,8 @@ inline auto MakeSendSeq(auto&& proto_msg){
     return res;
 }
 
+inline std::unique_ptr<asio::steady_timer> heartBeatTimer;
+
 inline awaitable<std::tuple<asio::error_code, uint64_t>> SendMsg(auto& socket, auto&& proto_msg){
     SendSequence bufferSeq;
     bufferSeq.len = proto_msg.ByteSizeLong();
@@ -63,6 +65,8 @@ inline awaitable<std::tuple<asio::error_code, uint64_t>> SendMsg(auto& socket, a
     bufferSeq[0] = asio::buffer(&bufferSeq.len, sizeof(bufferSeq.len));
     bufferSeq[1] = asio::buffer(bufferSeq.buf);
     auto [ec, len] = co_await socket.async_write_some(bufferSeq, use_nothrow_awaitable);
+    if (heartBeatTimer)
+        heartBeatTimer->cancel();
     co_return std::make_tuple(ec, len);
 }
 
@@ -78,6 +82,8 @@ inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& 
     if (ec2){
         co_return std::make_tuple(ec2, std::vector<char>{});
     }
+    if (heartBeatTimer)
+        heartBeatTimer->cancel();
     co_return std::make_tuple(asio::error_code{}, std::move(buf));
 }
 

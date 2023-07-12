@@ -24,6 +24,8 @@ message pack {
     translate = 0;
     connect = 1;
     disconnect = 2;
+    ping = 3;
+    pong = 4;
   }
   Type type = 3;
   bytes data = 4;
