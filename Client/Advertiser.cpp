@@ -4,6 +4,7 @@
 
 #include "Advertiser.h"
 
+
 Advertiser::Advertiser(asio::io_context &executor,
                        std::function<awaitable<bool>(uint64_t)> NewConnection,
                        std::function<awaitable<void>(uint64_t)> DisConnection,
@@ -11,8 +12,7 @@ Advertiser::Advertiser(asio::io_context &executor,
         server(executor),
         ReqNewConnection(std::move(NewConnection)),
         ReqDisConnection(std::move(DisConnection)),
-        RecvData(std::move(RecvData)),
-        heartBeatPoutTimer(executor)
+        RecvData(std::move(RecvData))
 {
     TRACE_FUNC(logger);
 }
@@ -137,6 +137,8 @@ awaitable<asio::error_code> Advertiser::AsyncConnect(std::string ServerIp, uint1
 
     // start listening
     co_spawn(co_await this_coro::executor, RecvFromServer(), asio::detached);
+    // start heart beat
+    co_spawn(co_await this_coro::executor, HeartBeat(), asio::detached);
     this->proxyPort = proxyPort;
     co_return asio::error_code{};
 }
@@ -161,6 +163,7 @@ awaitable<void> Advertiser::RecvFromServer() {
         if (!data.ParseFromArray(recvBuf.data(), static_cast<int>(recvBuf.size()))){
             LOG_ERROR(logger, "parse data failed");
             continue;
+            // TODO: Can not continue, because we don't know where a pack start, how should fix it?
         }
 
         if (data.has_listen_response() && data.listen_response().status() != net::listen_response::success){
@@ -214,13 +217,18 @@ awaitable<void> Advertiser::RecvFromServer() {
                 co_spawn(co_await this_coro::executor, RecvData(pack.id(), pack.data()), asio::detached);
                 break;
             case net::pack::pong:
-                co_await RecvHeardBeatPout();
+                LOG_TRACE(logger, "recv pong, id: {}", pack.id());
                 break;
             default:
                 LOG_WARN(logger, "unknown pack type: {}", pack.type());
                 break;
         }
     }
+
+    // exit
+    server.close();
+    heartBeatTimer->cancel();
+
     co_return;
 }
 
@@ -265,37 +273,36 @@ awaitable<void> Advertiser::HeartBeat() {
             LOG_WARN(logger, "heart beat timer not found");
             co_return;
         }
-        heartBeatTimer->expires_after(5min);
+        heartBeatTimer->expires_after(1min);
         auto [ec] = co_await heartBeatTimer->async_wait(use_nothrow_awaitable);
+        if (!server.is_open())
+            co_return;
         if (ec){
+            if (heartbeatFlag)
+                heartbeatFlag =  false;
             continue; // normal, heart beat be canceled
         }
 
+        // timeout
+        if (heartbeatFlag){
+            // recv response timeout
+            LOG_ERROR(logger, "recv heart beat response timeout");
+            server.close();
+            co_return;
+        }
+
         // timeout, send heart beat
-        LOG_INFO(logger, "Timeout, send heart beat");
-        heartBeatPoutTimer.expires_after(10s);
+        LOG_TRACE(logger, "Timeout, send heart beat");
         net::data data;
         auto& pack{*data.mutable_pack()};
         pack.set_type(net::pack::ping);
         pack.set_port(proxyPort);
-        auto [ec2, res] = co_await (heartBeatPoutTimer.async_wait(use_nothrow_awaitable) && SendMsg(server, data));
-        auto& [ec3, _] = res;
-        if (ec3){
-            LOG_ERROR(logger, "send heartbeat failed, ec: {}", ec.message());
-            break;
-        }
+        auto [ ec2, _] = co_await SendMsg(server, data);
         if (ec2){
-            LOG_DEBUG(logger, "server response heartbeat");
-            continue; // normal, heart beat be canceled
+            LOG_ERROR(logger, "send heartbeat failed, ec: {}", ec.message());
+            server.close();
+            co_return;
         }
-        // timeout, The server connection may have been lost and should exit
-        LOG_ERROR(logger, "send heartbeat timeout, server connection may have been lost");
-        server.close();
+        heartbeatFlag = true;
     }
-}
-
-awaitable<void> Advertiser::RecvHeardBeatPout() {
-    TRACE_FUNC(logger);
-    heartBeatPoutTimer.cancel();
-    co_return ;
 }

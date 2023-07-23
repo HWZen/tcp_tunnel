@@ -31,7 +31,6 @@ public:
 
     awaitable<void> SendToServer(uint64_t id, std::string_view data);
 
-    awaitable<void> RecvHeardBeatPout();
 
 private:
     awaitable<void> RecvFromServer();
@@ -47,7 +46,7 @@ private:
     std::function<awaitable<void>(uint64_t)> ReqDisConnection;
     std::function<awaitable<void>(uint64_t, std::string)> RecvData;
 
-    asio::steady_timer heartBeatPoutTimer;
+    volatile bool heartbeatFlag{false};
 
     Logger logger{"Advertiser"};
 };
