@@ -71,6 +71,43 @@ inline awaitable<std::tuple<asio::error_code, uint64_t>> SendMsg(auto& socket, a
 }
 
 
+
+// Modified RecvMsg function to handle message boundaries correctly.
+inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(asio::ip::tcp::socket& socket) {
+    // Read the length prefix (8 bytes).
+    uint64_t len;
+    std::vector<char> lenBuffer(sizeof(len));
+    size_t totalBytesRead = 0;
+    while (totalBytesRead < sizeof(len)) {
+        auto buffer = asio::buffer(lenBuffer.data() + totalBytesRead, sizeof(len) - totalBytesRead);
+        auto [ec, bytesRead] = co_await asio::async_read(socket, buffer, use_nothrow_awaitable);
+        if (ec) {
+            co_return std::make_tuple(ec, std::vector<char>{});
+        }
+        totalBytesRead += bytesRead;
+    }
+    // Now, we have the complete length prefix.
+    len = *reinterpret_cast<uint64_t*>(lenBuffer.data());
+
+    // Read the complete message data based on the received length.
+    std::vector<char> buf(static_cast<size_t>(len));
+    totalBytesRead = 0;
+    while (totalBytesRead < len) {
+        auto buffer = asio::buffer(buf.data() + totalBytesRead, len - totalBytesRead);
+        auto [ec, bytesRead] = co_await asio::async_read(socket, buffer, use_nothrow_awaitable);
+        if (ec) {
+            co_return std::make_tuple(ec, std::vector<char>{});
+        }
+        totalBytesRead += bytesRead;
+    }
+
+    if (heartBeatTimer)
+        heartBeatTimer->cancel();
+
+    co_return std::make_tuple(asio::error_code{}, std::move(buf));
+}
+
+
 inline awaitable<std::tuple<asio::error_code, std::vector<char>>> RecvMsg(auto& socket){
     uint64_t len;
     auto [ec1, len1] = co_await socket.async_read_some(asio::buffer(&len, sizeof(len)), use_nothrow_awaitable);
