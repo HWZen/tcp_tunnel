@@ -22,7 +22,14 @@ asio::error_code Advertiser::connect(std::string_view ServerIp, uint16_t port, u
     LOG_INFO(logger, "try to connect to server: {}:{}, proxy port: {}", ServerIp, port, proxyPort);
     // connect to server
     asio::error_code ec;
-    server.connect({asio::ip::make_address(ServerIp), port}, ec);
+    // DNS parse
+    auto endpoint = asio::ip::tcp::resolver(server.get_executor()).resolve(ServerIp, std::to_string(port), ec);
+    if (ec)
+    {
+        LOG_ERROR(logger, "connect to server failed, ec: {}", ec.message());
+        return ec;
+    }
+    server.connect( *endpoint.begin(), ec);
     if (ec){
         LOG_ERROR(logger, "connect to server failed, ec: {}", ec.message());
         return ec;
