@@ -34,7 +34,7 @@ awaitable<void> TunnelListener::ProcessPack(const net::pack& pack)
         break;
     case net::pack::ping:
     {
-        LOG_INFO(logger, "recv ping");
+        LOG_TRACE(logger, "recv ping");
         net::pack pong;
         pong.set_type(net::pack::pong);
         pong.set_port(port);
@@ -69,7 +69,8 @@ awaitable<void> TunnelListener::SendToConnection(net::pack pack)
     ul.unlock();
 
     // send to connection
-    auto [ec, _] = co_await it->second.async_write_some(asio::buffer(pack.data()), use_nothrow_awaitable);
+    std::string buf{pack.data()};
+    auto [ec, _] = co_await it->second.async_write_some(asio::buffer(buf), use_nothrow_awaitable);
     if (ec){
         LOG_ERROR(logger, "send error: {}", ec.message());
         // send client that this connection was disconnected
