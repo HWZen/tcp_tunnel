@@ -12,7 +12,9 @@
 
 class ClientProcess {
 public:
-    explicit ClientProcess(tcp::socket socket) : socket(std::move(socket)) {}
+    explicit ClientProcess(tcp::socket socket) : socket(std::move(socket)), heartBeatTimer(this->socket.get_executor()) {
+        co_spawn(this->socket.get_executor(), HeartBeat(), asio::detached);
+    }
     awaitable<void> operator()();
 
     awaitable<void> ProcessRequest(net::listen_request request);
@@ -20,8 +22,14 @@ public:
     awaitable<void> ProcessPackage(net::pack pack);
 
 private:
+    awaitable<void> HeartBeat();
+private:
     tcp::socket socket;
     std::unordered_map<uint16_t, std::weak_ptr<TunnelListener>> usedTunnels{};
+
+    asio::steady_timer heartBeatTimer;
+//    volatile bool heartbeatFlag{false};
+
     Logger logger{"ClientProcess"};
 };
 

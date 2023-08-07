@@ -17,6 +17,8 @@ awaitable<void> ClientProcess::operator()() {
             break;
         }
 
+        heartBeatTimer.cancel();
+
         net::data data;
         if (!data.ParseFromArray(buffer.data(), static_cast<int>(buffer.size()))){
             LOG_ERROR(logger, "parse data error");
@@ -34,12 +36,15 @@ awaitable<void> ClientProcess::operator()() {
         }
     }
 
+    socket.close();
     // close all acceptors
     for (auto& [port, _] : usedTunnels){
         auto acceptor = AcceptorPool::GetInstance().GetAcceptor(port);
-        if (acceptor)
+        if (acceptor) {
             acceptor->close();
+        }
     }
+    heartBeatTimer.cancel();
     using namespace std::chrono_literals;
     co_await timeout(1s);
 
@@ -208,4 +213,24 @@ awaitable<void> ClientProcess::ProcessPackage(net::pack pack) {
     co_await tunnel.ProcessPack(pack);
 
     co_return;
+}
+
+awaitable<void> ClientProcess::HeartBeat() {
+    TRACE_FUNC(logger);
+    LOG_DEBUG(logger,"in heard beat");
+    using namespace std::chrono_literals;
+    for (;;){
+        heartBeatTimer.expires_after(4min);
+        auto [ec] = co_await heartBeatTimer.async_wait(use_nothrow_awaitable);
+        if (!socket.is_open())
+            co_return;
+        if (ec){
+            continue; // normal, heart beat be canceled
+        }
+
+        // recv response timeout
+        LOG_ERROR(logger, "recv heart beat response timeout");
+        socket.close();
+        co_return;
+    }
 }

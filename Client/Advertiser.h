@@ -46,6 +46,7 @@ private:
     std::function<awaitable<void>(uint64_t)> ReqDisConnection;
     std::function<awaitable<void>(uint64_t, std::string)> RecvData;
 
+    asio::steady_timer heartBeatTimer;
     volatile bool heartbeatFlag{false};
 
     Logger logger{"Advertiser"};

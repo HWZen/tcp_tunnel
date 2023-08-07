@@ -12,7 +12,8 @@ Advertiser::Advertiser(asio::io_context &executor,
         server(executor),
         ReqNewConnection(std::move(NewConnection)),
         ReqDisConnection(std::move(DisConnection)),
-        RecvData(std::move(RecvData))
+        RecvData(std::move(RecvData)),
+        heartBeatTimer(executor)
 {
     TRACE_FUNC(logger);
 }
@@ -225,6 +226,7 @@ awaitable<void> Advertiser::RecvFromServer() {
                 break;
             case net::pack::pong:
                 LOG_TRACE(logger, "recv pong, id: {}", pack.id());
+                heartBeatTimer.cancel();
                 break;
             default:
                 LOG_WARN(logger, "unknown pack type: {}", pack.type());
@@ -234,7 +236,7 @@ awaitable<void> Advertiser::RecvFromServer() {
 
     // exit
     server.close();
-    heartBeatTimer->cancel();
+    heartBeatTimer.cancel();
 
     co_return;
 }
@@ -276,12 +278,8 @@ awaitable<void> Advertiser::HeartBeat() {
     LOG_DEBUG(logger,"in heard beat");
     using namespace std::chrono_literals;
     for (;;){
-        if (!heartBeatTimer){
-            LOG_WARN(logger, "heart beat timer not found");
-            co_return;
-        }
-        heartBeatTimer->expires_after(1min);
-        auto [ec] = co_await heartBeatTimer->async_wait(use_nothrow_awaitable);
+        heartBeatTimer.expires_after(3min);
+        auto [ec] = co_await heartBeatTimer.async_wait(use_nothrow_awaitable);
         if (!server.is_open())
             co_return;
         if (ec){

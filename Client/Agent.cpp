@@ -23,9 +23,6 @@ Agent::Agent(
 {
     TRACE_FUNC(logger);
 
-    // init heartBeatTimer
-    heartBeatTimer = std::make_unique<asio::steady_timer>(ioContext);
-
     LOG_INFO(logger, "proxyAddress: {}, proxyPort: {}, serverAddress: {}, serverPort: {}, requestPort: {}",
              proxyAddress, proxyPort, serverAddress, serverPort, requestPort);
 }
@@ -42,7 +39,6 @@ void Agent::Connect() {
 void Agent::Run() {
     TRACE_FUNC(logger);
     ioContext.run();
-    heartBeatTimer.reset(nullptr);
 }
 
 awaitable<bool> Agent::NewConnection(uint64_t id) {
